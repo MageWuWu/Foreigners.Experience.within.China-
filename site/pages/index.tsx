@@ -1,7 +1,1 @@
-import { useEffect } from 'react'
-import { useRouter } from 'next/router'
-export default function Home() {
-  const router = useRouter()
-  useEffect(() => { router.replace('/docs') }, [router])
-  return null
-}
+欢迎访问外国人在中国的体验文档！
