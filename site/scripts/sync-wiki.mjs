@@ -1,37 +1,39 @@
-import { execSync } from 'node:child_process'
-import fs from 'node:fs'
-import path from 'node:path'
-import os from 'node:os'
+// site/scripts/sync-wiki.mjs
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs/promises';
+import path from 'path';
+import removeMd from 'remove-markdown';
 
-const WIKI_GIT = 'https://github.com/MageWuWu/Foreigners.Experience.within.China-.wiki.git'
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wiki-'))
+const execAsync = promisify(exec);
 
-console.log('[sync-wiki] cloning wiki...')
-execSync(`git clone --depth 1 "${WIKI_GIT}" "${tmp}"`, { stdio: 'inherit' })
+async function syncWiki() {
+  console.log('[sync-wiki] Cloning wiki...');
+  const tmp = '/tmp/wiki';
+  await execAsync(`rm -rf ${tmp} && git clone https://github.com/MageWuWu/Foreigners.Experience.within.China-.wiki.git ${tmp}`);
+  console.log('[sync-wiki] Stripping markdown...');
 
-const docsDir = path.join(process.cwd(), 'pages', 'docs')
-fs.rmSync(docsDir, { recursive: true, force: true })
-fs.mkdirSync(docsDir, { recursive: true })
+  const srcFiles = await fs.readdir(tmp);
+  const destDir = path.resolve('site/pages/docs');
+  await fs.rm(destDir, { recursive: true, force: true });
+  await fs.mkdir(destDir, { recursive: true });
 
-console.log('[sync-wiki] copying files...')
-copyRecursive(tmp, docsDir)
-
-const homeMd = path.join(docsDir, 'Home.md')
-const indexMd = path.join(docsDir, 'index.md')
-if (fs.existsSync(homeMd)) fs.renameSync(homeMd, indexMd)
-
-console.log('[sync-wiki] done → pages/docs')
-
-function copyRecursive(src, dest) {
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    if (entry.name === '.git') continue
-    const s = path.join(src, entry.name)
-    const d = path.join(dest, entry.name)
-    if (entry.isDirectory()) {
-      fs.mkdirSync(d, { recursive: true })
-      copyRecursive(s, d)
-    } else {
-      fs.copyFileSync(s, d)
-    }
+  for (const file of srcFiles) {
+    if (!file.endsWith('.md')) continue;
+    const srcPath = path.join(tmp, file);
+    const destPath = path.join(destDir, file);
+    const md = await fs.readFile(srcPath, 'utf8');
+    const text = removeMd(md, { useImgAltText: true, gfm: true });
+    await fs.writeFile(destPath, text, 'utf8');
+    console.log(` → ${file} processed`);
   }
+
+  console.log('[sync-wiki] All markdown stripped and copied.');
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  syncWiki().catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
 }
