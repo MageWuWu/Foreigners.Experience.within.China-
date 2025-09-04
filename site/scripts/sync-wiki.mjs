@@ -1,4 +1,3 @@
-// site/scripts/sync-wiki.mjs
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs/promises';
@@ -8,27 +7,26 @@ import removeMd from 'remove-markdown';
 const execAsync = promisify(exec);
 
 async function syncWiki() {
-  console.log('[sync-wiki] Cloning wiki...');
+  console.log('[sync-wiki] Cloning wiki repo...');
   const tmp = '/tmp/wiki';
   await execAsync(`rm -rf ${tmp} && git clone https://github.com/MageWuWu/Foreigners.Experience.within.China-.wiki.git ${tmp}`);
-  console.log('[sync-wiki] Stripping markdown...');
-
-  const srcFiles = await fs.readdir(tmp);
+  
+  console.log('[sync-wiki] Stripping markdown, outputting plain text...');
+  const files = await fs.readdir(tmp);
   const destDir = path.resolve('site/pages/docs');
   await fs.rm(destDir, { recursive: true, force: true });
   await fs.mkdir(destDir, { recursive: true });
 
-  for (const file of srcFiles) {
+  for (const file of files) {
     if (!file.endsWith('.md')) continue;
-    const srcPath = path.join(tmp, file);
-    const destPath = path.join(destDir, file);
-    const md = await fs.readFile(srcPath, 'utf8');
-    const text = removeMd(md, { useImgAltText: true, gfm: true });
-    await fs.writeFile(destPath, text, 'utf8');
-    console.log(` → ${file} processed`);
+    const content = await fs.readFile(path.join(tmp, file), 'utf8');
+    const plain = removeMd(content, { useImgAltText: true, gfm: true });
+    const destFile = path.join(destDir, file.replace(/\.md$/, '.txt'));
+    await fs.writeFile(destFile, plain, 'utf8');
+    console.log(' → Written plain text:', path.basename(destFile));
   }
 
-  console.log('[sync-wiki] All markdown stripped and copied.');
+  console.log('[sync-wiki] Done.');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -37,3 +35,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   });
 }
+
