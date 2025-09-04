@@ -1,32 +1,40 @@
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { remark } from 'remark';
+import strip from 'strip-markdown';
 import fs from 'fs/promises';
 import path from 'path';
-import removeMd from 'remove-markdown';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
 async function syncWiki() {
-  console.log('[sync-wiki] Cloning wiki repo...');
-  const tmp = '/tmp/wiki';
-  await execAsync(`rm -rf ${tmp} && git clone https://github.com/MageWuWu/Foreigners.Experience.within.China-.wiki.git ${tmp}`);
-  
-  console.log('[sync-wiki] Stripping markdown, outputting plain text...');
-  const files = await fs.readdir(tmp);
-  const destDir = path.resolve('site/pages/docs');
-  await fs.rm(destDir, { recursive: true, force: true });
-  await fs.mkdir(destDir, { recursive: true });
+  console.log('[sync-wiki] Cloning wiki...');
+  const tmpDir = '/tmp/wiki';
+  await execAsync(`rm -rf ${tmpDir} && git clone https://github.com/MageWuWu/Foreigners.Experience.within.China-.wiki.git ${tmpDir}`);
+  console.log('[sync-wiki] Copying and stripping text from .md files...');
 
+  const docsDir = path.resolve('site/pages/docs');
+  await fs.rm(docsDir, { recursive: true, force: true });
+  await fs.mkdir(docsDir, { recursive: true });
+
+  const files = await fs.readdir(tmpDir);
   for (const file of files) {
-    if (!file.endsWith('.md')) continue;
-    const content = await fs.readFile(path.join(tmp, file), 'utf8');
-    const plain = removeMd(content, { useImgAltText: true, gfm: true });
-    const destFile = path.join(destDir, file.replace(/\.md$/, '.txt'));
-    await fs.writeFile(destFile, plain, 'utf8');
-    console.log(' → Written plain text:', path.basename(destFile));
+    if (file.endsWith('.md')) {
+      const src = path.join(tmpDir, file);
+      const dest = path.join(docsDir, file);
+      const md = await fs.readFile(src, 'utf8');
+
+      const processed = await remark()
+        .use(strip)
+        .process(md);
+
+      const text = String(processed);
+      await fs.writeFile(dest, text);
+      console.log(` → processed ${file}`);
+    }
   }
 
-  console.log('[sync-wiki] Done.');
+  console.log('[sync-wiki] Done → site/pages/docs');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -35,4 +43,3 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   });
 }
-
